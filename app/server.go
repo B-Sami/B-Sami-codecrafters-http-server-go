@@ -125,6 +125,14 @@ func handleRequest(conn net.Conn) {
 	method := methodAndPath[0]
 	path := methodAndPath[1]
 
+	userAgent := ""
+	for _, line := range lines[1:] {
+		if strings.HasPrefix(line, "User-Agent:") {
+			userAgent = strings.TrimPrefix(line, "User-Agent: ")
+			break
+		}
+	}
+
 	if method == "GET" {
 		var responseBody string
 		var statusCode int
@@ -132,6 +140,10 @@ func handleRequest(conn net.Conn) {
 
 		if path == "/" {
 			responseBody = ""
+			statusCode = 200
+			statusPhrase = "OK"
+		} else if  path == "/user-agent" {
+			responseBody = userAgent
 			statusCode = 200
 			statusPhrase = "OK"
 		} else if strings.HasPrefix(path, "/echo/") {
