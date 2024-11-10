@@ -25,17 +25,18 @@ type HTTPResponse struct {
 	ResponseBody string
 }
 
-func NewServerResponse(statusCode int, statusPhrase, body string) *HTTPResponse {
+func NewServerResponse(statusCode int, statusPhrase string, headers map[string]string, body string) *HTTPResponse {
 	return &HTTPResponse{
 		StatusLine: StatusLine{
 			HTTPVersion:  "HTTP/1.1",
 			StatusCode:   statusCode,
 			StatusPhrase: statusPhrase,
 		},
-		Headers:      make(map[string]string),
+		Headers:      headers,
 		ResponseBody: body,
 	}
 }
+
 
 func (r *HTTPResponse) FormatStatusLine() string {
 	return fmt.Sprintf("%s %d %s\r\n", r.StatusLine.HTTPVersion, r.StatusLine.StatusCode, r.StatusLine.StatusPhrase)
@@ -95,6 +96,13 @@ func (s *Server) ListenAndServe(address string) error {
 	}
 }
 
+func createHeaders(body string) map[string]string {
+	headers := map[string]string{
+		"Content-Type":   "text/plain",
+		"Content-Length": fmt.Sprintf("%d", len(body)),
+	}
+	return headers
+}
 func handleRequest(conn net.Conn) {
 	buf := make([]byte, 1024)
 	_, err := conn.Read(buf)
@@ -104,6 +112,7 @@ func handleRequest(conn net.Conn) {
 		return
 	}
 
+	// Parse the incoming request
 	request := string(buf)
 	lines := strings.Split(request, "\r\n")
 	methodAndPath := strings.Split(lines[0], " ")
@@ -116,23 +125,58 @@ func handleRequest(conn net.Conn) {
 	method := methodAndPath[0]
 	path := methodAndPath[1]
 
-	var response *HTTPResponse
-
+	// Handle the GET method
 	if method == "GET" {
+		var responseBody string
+		var statusCode int
+		var statusPhrase string
+
+		// Handle root path "/"
 		if path == "/" {
-			response = NewServerResponse(200, "OK", "")
+			responseBody = ""
+			statusCode = 200
+			statusPhrase = "OK"
+		} else if strings.HasPrefix(path, "/echo/") {
+			echoStr := strings.TrimPrefix(path, "/echo/")
+			if echoStr != "" {
+				responseBody = echoStr
+				statusCode = 200
+				statusPhrase = "OK"
+			} else {
+				// If the echo string is empty, return 404
+				responseBody = "Echo path is empty"
+				statusCode = 404
+				statusPhrase = "Not Found"
+			}
 		} else {
-			response = NewServerResponse(404, "Not Found", "")
+			// For any other undefined path, return 404
+			responseBody = "Page not found"
+			statusCode = 404
+			statusPhrase = "Not Found"
+		}
+
+		// Prepare headers
+		headers := map[string]string{
+			"Content-Type":   "text/plain",
+			"Content-Length": fmt.Sprintf("%d", len(responseBody)),
+		}
+
+		// Create response and send it
+		response := NewServerResponse(statusCode, statusPhrase, headers, responseBody)
+		_, err := conn.Write([]byte(response.FullResponse()))
+		if err != nil {
+			fmt.Println("Error sending response:", err)
 		}
 	} else {
-		response = NewServerResponse(405, "Method Not Allowed", "")
-	}
-
-	_, err = conn.Write([]byte(response.FullResponse()))
-	if err != nil {
-		fmt.Println("Error sending response:", err)
-		conn.Close()
-		return
+		headers := map[string]string{
+			"Content-Type":   "text/plain",
+			"Content-Length": "0",
+		}
+		response := NewServerResponse(405, "Method Not Allowed", headers, "")
+		_, err := conn.Write([]byte(response.FullResponse()))
+		if err != nil {
+			fmt.Println("Error sending response:", err)
+		}
 	}
 
 	conn.Close()
