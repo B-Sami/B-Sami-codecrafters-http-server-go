@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 )
 
 type Server struct {
@@ -24,15 +25,15 @@ type HTTPResponse struct {
 	ResponseBody string
 }
 
-func NewServerResponse() *HTTPResponse {
+func NewServerResponse(statusCode int, statusPhrase, body string) *HTTPResponse {
 	return &HTTPResponse{
 		StatusLine: StatusLine{
 			HTTPVersion:  "HTTP/1.1",
-			StatusCode:   200,
-			StatusPhrase: "OK",
+			StatusCode:   statusCode,
+			StatusPhrase: statusPhrase,
 		},
 		Headers:      make(map[string]string),
-		ResponseBody: "",
+		ResponseBody: body,
 	}
 }
 
@@ -103,7 +104,29 @@ func handleRequest(conn net.Conn) {
 		return
 	}
 
-	response := NewServerResponse()
+	request := string(buf)
+	lines := strings.Split(request, "\r\n")
+	methodAndPath := strings.Split(lines[0], " ")
+	if len(methodAndPath) < 3 {
+		fmt.Println("Invalid request format")
+		conn.Close()
+		return
+	}
+
+	method := methodAndPath[0]
+	path := methodAndPath[1]
+
+	var response *HTTPResponse
+
+	if method == "GET" {
+		if path == "/" {
+			response = NewServerResponse(200, "OK", "")
+		} else {
+			response = NewServerResponse(404, "Not Found", "")
+		}
+	} else {
+		response = NewServerResponse(405, "Method Not Allowed", "")
+	}
 
 	_, err = conn.Write([]byte(response.FullResponse()))
 	if err != nil {
