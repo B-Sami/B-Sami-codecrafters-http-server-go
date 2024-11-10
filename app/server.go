@@ -125,13 +125,11 @@ func handleRequest(conn net.Conn) {
 	method := methodAndPath[0]
 	path := methodAndPath[1]
 
-	// Handle the GET method
 	if method == "GET" {
 		var responseBody string
 		var statusCode int
 		var statusPhrase string
 
-		// Handle root path "/"
 		if path == "/" {
 			responseBody = ""
 			statusCode = 200
@@ -143,36 +141,22 @@ func handleRequest(conn net.Conn) {
 				statusCode = 200
 				statusPhrase = "OK"
 			} else {
-				// If the echo string is empty, return 404
 				responseBody = "Echo path is empty"
 				statusCode = 404
 				statusPhrase = "Not Found"
 			}
 		} else {
-			// For any other undefined path, return 404
 			responseBody = "Page not found"
 			statusCode = 404
 			statusPhrase = "Not Found"
 		}
-
-		// Prepare headers
-		headers := map[string]string{
-			"Content-Type":   "text/plain",
-			"Content-Length": fmt.Sprintf("%d", len(responseBody)),
-		}
-
-		// Create response and send it
-		response := NewServerResponse(statusCode, statusPhrase, headers, responseBody)
+		response := NewServerResponse(statusCode, statusPhrase, createHeaders(responseBody), responseBody)
 		_, err := conn.Write([]byte(response.FullResponse()))
 		if err != nil {
 			fmt.Println("Error sending response:", err)
 		}
 	} else {
-		headers := map[string]string{
-			"Content-Type":   "text/plain",
-			"Content-Length": "0",
-		}
-		response := NewServerResponse(405, "Method Not Allowed", headers, "")
+		response := NewServerResponse(405, "Method Not Allowed", createHeaders(""), "")
 		_, err := conn.Write([]byte(response.FullResponse()))
 		if err != nil {
 			fmt.Println("Error sending response:", err)
