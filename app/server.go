@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 )
 
@@ -124,7 +125,7 @@ func handleRequest(conn net.Conn) {
 	}
 
 	method := methodAndPath[0]
-	path := methodAndPath[1]
+	urlPath := methodAndPath[1]
 
 	userAgent := ""
 	for _, line := range lines[1:] {
@@ -140,16 +141,16 @@ func handleRequest(conn net.Conn) {
 	var contentType string = "text/plain"
 
 	if method == "GET" {
-		if path == "/" {
+		if urlPath == "/" {
 			responseBody = ""
 			statusCode = 200
 			statusPhrase = "OK"
-		} else if  path == "/user-agent" {
+		} else if  urlPath == "/user-agent" {
 			responseBody = userAgent
 			statusCode = 200
 			statusPhrase = "OK"
-		} else if strings.HasPrefix(path, "/echo/") {
-			echoStr := strings.TrimPrefix(path, "/echo/")
+		} else if strings.HasPrefix(urlPath, "/echo/") {
+			echoStr := strings.TrimPrefix(urlPath, "/echo/")
 			if echoStr != "" {
 				responseBody = echoStr
 				statusCode = 200
@@ -159,9 +160,9 @@ func handleRequest(conn net.Conn) {
 				statusCode = 404
 				statusPhrase = "Not Found"
 			}
-		} else if strings.HasPrefix(path, "/files/"){
+		} else if strings.HasPrefix(urlPath, "/files/"){
 			dir := os.Args[2]
-			fileName := strings.TrimPrefix(path, "/files/")
+			fileName := strings.TrimPrefix(urlPath, "/files/")
 			contentFile, err := os.ReadFile(dir + fileName)
 			if err != nil {
 				responseBody = "Echo path is empty"
@@ -184,21 +185,25 @@ func handleRequest(conn net.Conn) {
 			fmt.Println("Error sending response:", err)
 		}
 	} else if method == "POST" {
-		if strings.HasPrefix(path, "/files/"){
+		if strings.HasPrefix(urlPath, "/files/"){
+			content := strings.Trim(strings.Split(string(buf), "\r\n")[len(strings.Split(string(buf), "\r\n"))-1], "\x00")
 			dir := os.Args[2]
-			fileName := strings.TrimPrefix(path, "/files/")
-			contentFile, err := os.ReadFile(dir + fileName)
-
+			err = os.WriteFile(path.Join(dir, strings.Split(strings.Split(string(buf), "\r\n")[0], " ")[1][7:]), []byte(content), 0644)
 			if err != nil {
 				responseBody = "Echo path is empty"
 				statusCode = 404
 				statusPhrase = "Not Found"
 			} else {
-				responseBody = string(contentFile[:])
+				responseBody = "HTTP/1.1 201 Created\r\n\r\n"
 				statusCode = 201
-				statusPhrase = "OK"
+				statusPhrase = "Created"
 				contentType = "application/octet-stream"
 			}
+		}
+		response := NewServerResponse(statusCode, statusPhrase, createHeaders(responseBody, contentType), responseBody)
+		_, err := conn.Write([]byte(response.FullResponse()))
+		if err != nil {
+			fmt.Println("Error sending response:", err)
 		}
 	} else {
 		response := NewServerResponse(405, "Method Not Allowed", createHeaders("", "text/plain"), "")
