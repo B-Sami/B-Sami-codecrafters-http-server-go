@@ -96,13 +96,14 @@ func (s *Server) ListenAndServe(address string) error {
 	}
 }
 
-func createHeaders(body string) map[string]string {
+func createHeaders(body string, contentType string) map[string]string {
 	headers := map[string]string{
-		"Content-Type":   "text/plain",
+		"Content-Type":   contentType,
 		"Content-Length": fmt.Sprintf("%d", len(body)),
 	}
 	return headers
 }
+
 func handleRequest(conn net.Conn) {
 	buf := make([]byte, 1024)
 	_, err := conn.Read(buf)
@@ -137,7 +138,7 @@ func handleRequest(conn net.Conn) {
 		var responseBody string
 		var statusCode int
 		var statusPhrase string
-
+		var contentType string = "text/plain"
 		if path == "/" {
 			responseBody = ""
 			statusCode = 200
@@ -157,18 +158,32 @@ func handleRequest(conn net.Conn) {
 				statusCode = 404
 				statusPhrase = "Not Found"
 			}
+		} else if strings.HasPrefix(path, "/files/"){
+			dir := os.Args[2]
+			fileName := strings.TrimPrefix(path, "/files/")
+			contentFile, err := os.ReadFile(dir + fileName)
+			if err != nil {
+				responseBody = "Echo path is empty"
+				statusCode = 404
+				statusPhrase = "Not Found"
+			} else {
+				responseBody = string(contentFile[:])
+				statusCode = 200
+				statusPhrase = "OK"
+				contentType = "application/octet-stream"
+			}
 		} else {
 			responseBody = "Page not found"
 			statusCode = 404
 			statusPhrase = "Not Found"
 		}
-		response := NewServerResponse(statusCode, statusPhrase, createHeaders(responseBody), responseBody)
+		response := NewServerResponse(statusCode, statusPhrase, createHeaders(responseBody, contentType), responseBody)
 		_, err := conn.Write([]byte(response.FullResponse()))
 		if err != nil {
 			fmt.Println("Error sending response:", err)
 		}
 	} else {
-		response := NewServerResponse(405, "Method Not Allowed", createHeaders(""), "")
+		response := NewServerResponse(405, "Method Not Allowed", createHeaders("", "text/plain"), "")
 		_, err := conn.Write([]byte(response.FullResponse()))
 		if err != nil {
 			fmt.Println("Error sending response:", err)
