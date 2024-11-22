@@ -127,6 +127,22 @@ func handleRequest(conn net.Conn) {
 	method := methodAndPath[0]
 	urlPath := methodAndPath[1]
 
+	// Parse headers
+	headers := make(map[string]string)
+	for _, line := range lines[1:] {
+		if line == "" {
+			break
+		}
+		parts := strings.SplitN(line, ": ", 2)
+		if len(parts) == 2 {
+			headers[parts[0]] = parts[1]
+		}
+	}
+
+	// Check for Accept-Encoding header
+	acceptEncoding := headers["Accept-Encoding"]
+	supportsGzip := strings.Contains(acceptEncoding, "gzip")
+
 	userAgent := ""
 	for _, line := range lines[1:] {
 		if strings.HasPrefix(line, "User-Agent:") {
@@ -179,7 +195,11 @@ func handleRequest(conn net.Conn) {
 			statusCode = 404
 			statusPhrase = "Not Found"
 		}
-		response := NewServerResponse(statusCode, statusPhrase, createHeaders(responseBody, contentType), responseBody)
+		responseHeaders := createHeaders(responseBody, contentType)
+		if supportsGzip {
+			responseHeaders["Content-Encoding"] = "gzip"
+		}
+		response := NewServerResponse(statusCode, statusPhrase, responseHeaders, responseBody)
 		_, err := conn.Write([]byte(response.FullResponse()))
 		if err != nil {
 			fmt.Println("Error sending response:", err)
