@@ -134,11 +134,12 @@ func handleRequest(conn net.Conn) {
 		}
 	}
 
+	var responseBody string
+	var statusCode int
+	var statusPhrase string
+	var contentType string = "text/plain"
+
 	if method == "GET" {
-		var responseBody string
-		var statusCode int
-		var statusPhrase string
-		var contentType string = "text/plain"
 		if path == "/" {
 			responseBody = ""
 			statusCode = 200
@@ -181,6 +182,23 @@ func handleRequest(conn net.Conn) {
 		_, err := conn.Write([]byte(response.FullResponse()))
 		if err != nil {
 			fmt.Println("Error sending response:", err)
+		}
+	} else if method == "POST" {
+		if strings.HasPrefix(path, "/files/"){
+			dir := os.Args[2]
+			fileName := strings.TrimPrefix(path, "/files/")
+			contentFile, err := os.ReadFile(dir + fileName)
+
+			if err != nil {
+				responseBody = "Echo path is empty"
+				statusCode = 404
+				statusPhrase = "Not Found"
+			} else {
+				responseBody = string(contentFile[:])
+				statusCode = 201
+				statusPhrase = "OK"
+				contentType = "application/octet-stream"
+			}
 		}
 	} else {
 		response := NewServerResponse(405, "Method Not Allowed", createHeaders("", "text/plain"), "")
