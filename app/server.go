@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"net"
 	"net/http"
@@ -168,6 +170,13 @@ func handleRequest(conn net.Conn) {
 		} else if strings.HasPrefix(urlPath, "/echo/") {
 			echoStr := strings.TrimPrefix(urlPath, "/echo/")
 			if echoStr != "" {
+				if supportsGzip {
+					var buffer bytes.Buffer
+					w := gzip.NewWriter(&buffer)
+					w.Write([]byte(echoStr))
+					w.Close()
+					echoStr = buffer.String()
+				}
 				responseBody = echoStr
 				statusCode = 200
 				statusPhrase = "OK"
